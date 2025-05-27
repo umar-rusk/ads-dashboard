@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analytics Dashboard</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <link rel="stylesheet" href="style.css">
+
+</head>
+
+<body>
+    <div id="loginPage" style="display:none; min-height:100vh; display:flex; align-items:center; justify-content:center; background:#f7f6f3;">
+        <form id="loginForm" style="background:#fff; padding:40px 32px; border-radius:10px; box-shadow:0 2px 16px rgba(0,0,0,0.07); min-width:320px; max-width:90vw;">
+            <h2 style="margin-bottom:24px; text-align:center; color:#000;">Login</h2>
+            <div style="margin-bottom:18px;">
+                <label for="loginUsername" style="display:block; margin-bottom:6px; color:#37352f; font-weight:500;">Username</label>
+                <input type="text" id="loginUsername" style="width:100%; padding:10px; border:1px solid #d3d3d1; border-radius:6px; font-size:15px;" required autocomplete="username">
+            </div>
+            <div style="margin-bottom:24px;">
+                <label for="loginPassword" style="display:block; margin-bottom:6px; color:#37352f; font-weight:500;">Password</label>
+                <input type="password" id="loginPassword" style="width:100%; padding:10px; border:1px solid #d3d3d1; border-radius:6px; font-size:15px;" required autocomplete="current-password">
+            </div>
+            <button type="submit" style="width:100%; padding:12px; background:#000; color:#fff; border:none; border-radius:6px; font-size:16px; font-weight:600; cursor:pointer;">Login</button>
+            <div id="loginError" style="color:#d32f2f; margin-top:16px; text-align:center; display:none;">Invalid credentials</div>
+        </form>
+    </div>
+    <div id="dashboardContainer" style="display:none;">
+        <div class="logout-container">
+            <div class="dashboard-title">
+                <i class="fas fa-chart-line"></i>
+                <h1>Rumble Ads Dashboard</h1>
+            </div>
+            <button id="logoutBtn">Logout</button>
+        </div>
+    <div class="loading hidden" id="loading">
+        <div class="spinner"></div>
+    </div>
+
+    <div class="container">
+        <div class="header">
+            <h1>Analytics Dashboard</h1>
+            <p>Monitor your ad performance and revenue metrics</p>
+        </div>
+
+        <div class="filters-section">
+            <div class="filters-row">
+                    <!-- Partners filter (single select) -->
+                    <div class="filter-group">
+                        <label class="filter-label">Partner</label>
+                        <div class="custom-select-container" id="partnerSelectContainer">
+                            <div class="custom-select-input" id="partnerSelectInput">
+                                <span id="partnerSelected">All</span>
+                                <i class="fas fa-chevron-down custom-select-arrow" id="partnerArrow"></i>
+                            </div>
+                            <div class="custom-select-dropdown" id="partnerDropdown">
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Domain filter (multi-select) -->
+                <div class="filter-group">
+                    <label class="filter-label">Domain</label>
+                        <div class="multi-select-container">
+                            <div class="multi-select-input" id="domainMultiSelect">
+                                <div class="selected-tags" id="domainSelectedTags"></div>
+                                <span class="multi-select-placeholder" id="domainPlaceholder">All Domains</span>
+                                <i class="fas fa-chevron-down multi-select-arrow" id="domainArrow"></i>
+                            </div>
+                            <div class="multi-select-dropdown" id="domainDropdown">
+                                <input type="text" class="dropdown-search" id="domainSearch"
+                                    placeholder="Search domains...">
+                                <div class="select-all-option" id="domainSelectAll">
+                                    <div class="option-checkbox" id="domainSelectAllCheckbox"></div>
+                                    <span>Select All</span>
+                                </div>
+                                <div class="dropdown-options" id="domainOptions"></div>
+                            </div>
+                        </div>
+                        <select class="filter-select multi-select-hidden" id="domainFilter" multiple>
+                        <option value="">All Domains</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label class="filter-label">Date From</label>
+                    <input type="date" class="filter-input" id="dateFrom">
+                </div>
+                <div class="filter-group">
+                    <label class="filter-label">Date To</label>
+                    <input type="date" class="filter-input" id="dateTo">
+                </div>
+                <div class="filter-group">
+                    <button class="apply-btn" id="applyFilters">Apply Filters</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="kpi-grid">
+            <div class="kpi-card">
+                <div class="kpi-header">
+                    <i class="fas fa-eye kpi-icon"></i>
+                    <span class="kpi-title">Total Impressions</span>
+                </div>
+                <div class="kpi-value" id="totalImpressions">0</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-header">
+                        <i class="fas fa-file-alt kpi-icon"></i>
+                        <span class="kpi-title">Total Page Views</span>
+                </div>
+                    <div class="kpi-value" id="totalPageViews">0</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-header">
+                        <i class="fas fa-indian-rupee-sign kpi-icon"></i>
+                        <span class="kpi-title">Total Revenue</span>
+                </div>
+                    <div class="kpi-value" id="totalRevenue">₹0</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-header">
+                        <i class="fas fa-chart-line kpi-icon"></i>
+                        <span class="kpi-title">Average eCPM</span>
+                </div>
+                    <div class="kpi-value" id="averageEcpm">₹0</div>
+            </div>
+        </div>
+
+        <div class="chart-section">
+            <div class="chart-header">
+                <h3 class="chart-title">Revenue Trend</h3>
+                    <!-- Custom single-select dropdown for chart metric -->
+                    <div class="custom-select-container" id="chartMetricSelectContainer">
+                        <div class="custom-select-input" id="chartMetricSelectInput">
+                            <span id="chartMetricSelected">Revenue</span>
+                            <i class="fas fa-chevron-down custom-select-arrow" id="chartMetricArrow"></i>
+                        </div>
+                        <div class="custom-select-dropdown" id="chartMetricDropdown">
+                            <div class="custom-select-option" data-value="estimated_earnings">Revenue</div>
+                            <div class="custom-select-option" data-value="impressions">Impressions</div>
+                            <div class="custom-select-option" data-value="page_views">Page Views</div>
+                            <div class="custom-select-option" data-value="ecpm">eCPM</div>
+                        </div>
+                    </div>
+            </div>
+            <div class="chart-container">
+                <canvas id="trendsChart"></canvas>
+            </div>
+        </div>
+
+        <div class="table-section">
+            <div class="table-header">
+                <h3 class="table-title">Detailed Data</h3>
+                <input type="text" class="search-input" id="searchInput" placeholder="Search domains...">
+            </div>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Domain</th>
+                            <th>Page Views</th>
+                            <th>Impressions</th>
+                            <th>Page Views RPM</th>
+                            <th>Impressions RPM</th>
+                            <th>Viewability</th>
+                                <th>Revenue (₹)</th>
+                                <th>eCPM (₹)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="dataTableBody">
+                        <tr>
+                            <td colspan="9" class="empty-state">
+                                <i class="fas fa-chart-bar"></i>
+                                <div>No data available. Apply filters to view results.</div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="pagination">
+                <div class="pagination-info" id="paginationInfo">
+                    Showing 0 of 0 results
+                </div>
+                <div class="pagination-controls">
+                    <button class="pagination-btn" id="prevPage" disabled>Previous</button>
+                    <span id="currentPage">1</span>
+                    <button class="pagination-btn" id="nextPage" disabled>Next</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    </div>
+    <script src="script.js"></script>
+
+       
+</body>
+
+</html>
