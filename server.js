@@ -186,6 +186,7 @@ app.post('/api/table-data', async (req, res) => {
                 SELECT 
                     report_date as date,
                     site as domain_name,
+                    ad_unit,
                     NULL as page_views,
                     adx_impressions as impressions,
                     NULL as page_views_rpm,

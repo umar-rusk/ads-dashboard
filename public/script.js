@@ -500,7 +500,9 @@ async function loadDashboardData() {
 }
 function updateKPIs(kpis) {
     document.getElementById('totalImpressions').textContent = formatNumber(kpis.totalImpressions);
-    document.getElementById('totalPageViews').textContent = formatNumber(kpis.totalPageViews);
+    if (currentDashboardType !== 'admanager') {
+        document.getElementById('totalPageViews').textContent = formatNumber(kpis.totalPageViews);
+    }
     document.getElementById('totalRevenue').textContent = '₹' + formatNumber(kpis.totalRevenue, 2);
     document.getElementById('averageEcpm').textContent = '₹' + formatNumber(kpis.avgEcpm, 2);
 }
@@ -513,14 +515,23 @@ async function updateChart() {
             body: JSON.stringify({ ...filters, metric: chartMetric })
         });
         const chartData = await response.json();
-        // Update chart heading based on selected metric
-        const metricLabels = {
-            'estimated_earnings': 'Revenue',
-            'impressions': 'Impressions',
-            'page_views': 'Page Views',
-            'ecpm': 'eCPM'
-        };
-        document.querySelector('.chart-title').textContent = `${metricLabels[chartMetric]} Trend`;
+        // Update chart heading based on selected metric and dashboard type
+        let metricLabels;
+        if (currentDashboardType === 'admanager') {
+            metricLabels = {
+                'adx_revenue': 'Revenue',
+                'adx_impressions': 'Impressions',
+                'adx_ecpm': 'eCPM'
+            };
+        } else {
+            metricLabels = {
+                'estimated_earnings': 'Revenue',
+                'impressions': 'Impressions',
+                'page_views': 'Page Views',
+                'ecpm': 'eCPM'
+            };
+        }
+        document.querySelector('.chart-title').textContent = `${metricLabels[chartMetric] || 'Metric'} Trend`;
         renderChart(chartData, chartMetric);
     } catch (error) {
         console.error('Error loading chart data:', error);
@@ -528,18 +539,29 @@ async function updateChart() {
 }
 function renderChart(data, metric) {
     const ctx = document.getElementById('trendsChart').getContext('2d');
-    
     if (chart) {
         chart.destroy();
     }
-
-    const metricLabels = {
-        'estimated_earnings': 'Revenue (₹)',
-        'impressions': 'Impressions',
-        'page_views': 'Page Views',
-        'ecpm': 'eCPM (₹)'
-    };
-
+    // Chart label units
+    let metricLabels, decimals = 0;
+    if (currentDashboardType === 'admanager') {
+        metricLabels = {
+            'adx_revenue': 'Revenue (₹)',
+            'adx_impressions': 'Impressions',
+            'adx_ecpm': 'eCPM (₹)'
+        };
+        if (metric === 'adx_revenue' || metric === 'adx_ecpm') decimals = 2;
+        else decimals = 0;
+    } else {
+        metricLabels = {
+            'estimated_earnings': 'Revenue (₹)',
+            'impressions': 'Impressions',
+            'page_views': 'Page Views',
+            'ecpm': 'eCPM (₹)'
+        };
+        if (metric === 'estimated_earnings' || metric === 'ecpm') decimals = 2;
+        else decimals = 0;
+    }
     chart = new Chart(ctx, {
         type: 'line',
         data: {
@@ -581,7 +603,21 @@ function renderChart(data, metric) {
                     },
                     callbacks: {
                         label: function(context) {
-                            return formatNumber(context.raw, metric === 'ecpm' || metric === 'estimated_earnings' ? 2 : 0);
+                            // For Ad Manager, show exact value (no rounding for int, 2 decimals for money)
+                            if (currentDashboardType === 'admanager') {
+                                if (metric === 'adx_revenue' || metric === 'adx_ecpm') {
+                                    return context.raw !== null && context.raw !== undefined ? context.raw.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '';
+                                } else {
+                                    return context.raw !== null && context.raw !== undefined ? context.raw.toLocaleString('en-US') : '';
+                                }
+                            } else {
+                                // Adsense: 2 decimals for money, 0 for others
+                                if (metric === 'estimated_earnings' || metric === 'ecpm') {
+                                    return formatNumber(context.raw, 2);
+                                } else {
+                                    return formatNumber(context.raw, 0);
+                                }
+                            }
                         },
                         title: function(context) {
                             return context[0].label;
@@ -613,35 +649,73 @@ function renderChart(data, metric) {
 }
 function updateTable() {
     const tbody = document.getElementById('dataTableBody');
+    const table = document.querySelector('table');
     const startIndex = (currentPage - 1) * itemsPerPage;
     const endIndex = startIndex + itemsPerPage;
     const pageData = filteredData.slice(startIndex, endIndex);
 
+    // Update table header for Ad Manager
+    const thead = table.querySelector('thead');
+    if (currentDashboardType === 'admanager') {
+        thead.innerHTML = `<tr>
+            <th>Date</th>
+            <th>Domain</th>
+            <th>Ad Unit</th>
+            <th>Impressions</th>
+            <th>Revenue (₹)</th>
+            <th>eCPM (₹)</th>
+        </tr>`;
+    } else {
+        thead.innerHTML = `<tr>
+            <th>Date</th>
+            <th>Domain</th>
+            <th>Page Views</th>
+            <th>Impressions</th>
+            <th>Page Views RPM</th>
+            <th>Impressions RPM</th>
+            <th>Viewability</th>
+            <th>Revenue (₹)</th>
+            <th>eCPM (₹)</th>
+        </tr>`;
+    }
+
     if (pageData.length === 0) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="9" class="empty-state">
+                <td colspan="${currentDashboardType === 'admanager' ? 6 : 9}" class="empty-state">
                     <i class="fas fa-search"></i>
                     <div>No data found matching your criteria.</div>
                 </td>
             </tr>
         `;
     } else {
-        tbody.innerHTML = pageData.map(row => `
-            <tr>
-                <td>${formatDate(row.date)}</td>
-                <td>${row.domain_name}</td>
-                <td>${formatNumber(row.page_views)}</td>
-                <td>${formatNumber(row.impressions)}</td>
-                <td>₹${formatNumber(row.page_views_rpm, 2)}</td>
-                <td>₹${formatNumber(row.impressions_rpm, 2)}</td>
-                <td>${formatNumber(row.active_view_viewability, 2)}%</td>
-                <td>₹${formatNumber(row.estimated_earnings, 2)}</td>
-                <td>₹${formatNumber(row.ecpm, 2)}</td>
-            </tr>
-        `).join('');
+        if (currentDashboardType === 'admanager') {
+            tbody.innerHTML = pageData.map(row => `
+                <tr>
+                    <td>${formatDate(row.date || row.report_date)}</td>
+                    <td>${row.domain_name || row.site}</td>
+                    <td>${row.ad_unit || ''}</td>
+                    <td>${formatNumber(row.impressions || row.adx_impressions)}</td>
+                    <td>₹${formatNumber(row.estimated_earnings || row.adx_revenue, 2)}</td>
+                    <td>₹${formatNumber(row.ecpm || row.adx_ecpm, 2)}</td>
+                </tr>
+            `).join('');
+        } else {
+            tbody.innerHTML = pageData.map(row => `
+                <tr>
+                    <td>${formatDate(row.date)}</td>
+                    <td>${row.domain_name}</td>
+                    <td>${formatNumber(row.page_views)}</td>
+                    <td>${formatNumber(row.impressions)}</td>
+                    <td>₹${formatNumber(row.page_views_rpm, 2)}</td>
+                    <td>₹${formatNumber(row.impressions_rpm, 2)}</td>
+                    <td>${formatNumber(row.active_view_viewability, 2)}%</td>
+                    <td>₹${formatNumber(row.estimated_earnings, 2)}</td>
+                    <td>₹${formatNumber(row.ecpm, 2)}</td>
+                </tr>
+            `).join('');
+        }
     }
-
     updatePagination();
     updateKPIVisibility();
 }
@@ -879,8 +953,8 @@ function setupDashboardTabs() {
 }
 
 function updateKPIVisibility() {
-    // Hide Page Views KPI and chart option for Ad Manager
-    const pageViewsKpi = document.getElementById('totalPageViews').parentElement.parentElement;
+    // Use closest to find the KPI card container
+    const pageViewsKpi = document.getElementById('totalPageViews')?.closest('.kpi-card');
     const impressionsKpi = document.getElementById('totalImpressions').parentElement.parentElement;
     const revenueKpi = document.getElementById('totalRevenue').parentElement.parentElement;
     const ecpmKpi = document.getElementById('averageEcpm').parentElement.parentElement;
@@ -888,7 +962,7 @@ function updateKPIVisibility() {
     const pageViewsChartOption = chartMetricDropdown.querySelector('[data-value="page_views"]');
     // Table column
     const table = document.querySelector('table');
-    if (!pageViewsKpi || !impressionsKpi || !revenueKpi || !ecpmKpi || !pageViewsChartOption || !table) return;
+    if (!pageViewsKpi || !impressionsKpi || !revenueKpi || !ecpmKpi || !chartMetricDropdown || !table) return;
     // Table header and all rows for Page Views
     const ths = table.querySelectorAll('th');
     const pageViewsThIndex = Array.from(ths).findIndex(th => th.textContent.trim().toLowerCase().includes('page views'));
@@ -897,7 +971,7 @@ function updateKPIVisibility() {
         impressionsKpi.style.display = '';
         revenueKpi.style.display = '';
         ecpmKpi.style.display = '';
-        pageViewsChartOption.style.display = 'none';
+        if (pageViewsChartOption) pageViewsChartOption.style.display = 'none';
         // Hide Page Views column in table
         if (pageViewsThIndex !== -1) {
             ths[pageViewsThIndex].style.display = 'none';
@@ -912,7 +986,7 @@ function updateKPIVisibility() {
         impressionsKpi.style.display = '';
         revenueKpi.style.display = '';
         ecpmKpi.style.display = '';
-        pageViewsChartOption.style.display = '';
+        if (pageViewsChartOption) pageViewsChartOption.style.display = '';
         if (pageViewsThIndex !== -1) {
             ths[pageViewsThIndex].style.display = '';
             const trs = table.querySelectorAll('tbody tr, thead tr');
@@ -942,4 +1016,60 @@ const origUpdateChart = updateChart;
 updateChart = async function() {
     await origUpdateChart.apply(this, arguments);
     updateKPIVisibility();
+}
+
+function updateChartMetricDropdown() {
+    const chartMetricDropdown = document.getElementById('chartMetricDropdown');
+    const chartMetricSelectInput = document.getElementById('chartMetricSelectInput');
+    const chartMetricSelected = document.getElementById('chartMetricSelected');
+    if (!chartMetricDropdown) return;
+    chartMetricDropdown.innerHTML = '';
+    let options = [];
+    if (currentDashboardType === 'admanager') {
+        options = [
+            { label: 'Revenue', value: 'adx_revenue' },
+            { label: 'Impressions', value: 'adx_impressions' },
+            { label: 'eCPM', value: 'adx_ecpm' }
+        ];
+    } else {
+        options = [
+            { label: 'Revenue', value: 'estimated_earnings' },
+            { label: 'Impressions', value: 'impressions' },
+            { label: 'Page Views', value: 'page_views' },
+            { label: 'eCPM', value: 'ecpm' }
+        ];
+    }
+    options.forEach((opt, idx) => {
+        const div = document.createElement('div');
+        div.className = 'custom-select-option';
+        div.setAttribute('data-value', opt.value);
+        div.textContent = opt.label;
+        if (idx === 0) div.classList.add('selected');
+        div.addEventListener('click', function(e) {
+            // Remove selected from all
+            chartMetricDropdown.querySelectorAll('.custom-select-option').forEach(optEl => optEl.classList.remove('selected'));
+            div.classList.add('selected');
+            chartMetricSelected.textContent = opt.label;
+            chartMetric = opt.value;
+            chartMetricDropdown.classList.remove('open');
+            chartMetricSelectInput.classList.remove('active');
+            document.getElementById('chartMetricArrow').classList.remove('open');
+            updateChart();
+        });
+        chartMetricDropdown.appendChild(div);
+    });
+    // Set default
+    chartMetric = options[0].value;
+    chartMetricSelected.textContent = options[0].label;
+}
+// Call updateChartMetricDropdown on tab switch and dashboard init
+const origInitializeDashboard2 = initializeDashboard;
+initializeDashboard = function() {
+    origInitializeDashboard2.apply(this, arguments);
+    updateChartMetricDropdown();
+}
+const origSetupDashboardTabs2 = setupDashboardTabs;
+setupDashboardTabs = function() {
+    origSetupDashboardTabs2.apply(this, arguments);
+    updateChartMetricDropdown();
 }
