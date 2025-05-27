@@ -7,6 +7,7 @@ let chart = null;
 const API_BASE_URL = 'http://localhost:3000';
 let multiSelects = {};
 let partnerFilterLocked = false;
+let currentDashboardType = 'adsense'; // 'adsense' or 'admanager'
 
 // --- Multi-select (Domain) ---
 class MultiSelect {
@@ -339,6 +340,7 @@ document.addEventListener('DOMContentLoaded', function() {
     setupEventListeners();
     initializeCustomChartMetricSelect();
     initializePartnerSelect();
+    setupDashboardTabs();
 });
 function initializeDashboard() {
     // Set default date range (last 30 days)
@@ -377,6 +379,7 @@ function initializeDashboard() {
     document.getElementById('currentPage').textContent = '1 of 1';
     document.getElementById('prevPage').disabled = true;
     document.getElementById('nextPage').disabled = true;
+    updateKPIVisibility();
 }
 function setupEventListeners() {
     document.getElementById('applyFilters').addEventListener('click', () => {
@@ -419,7 +422,7 @@ function setupEventListeners() {
 async function loadFilterOptions() {
     try {
         // Always use the currently selected partnerId for the query
-        const response = await fetch(`${API_BASE_URL}/api/filter-options?partnerId=${selectedPartnerId}`);
+        const response = await fetch(`${API_BASE_URL}/api/filter-options?partnerId=${selectedPartnerId}&dashboardType=${currentDashboardType}`);
         const data = await response.json();
         // Populate partners dropdown
         if (data.partners) {
@@ -467,7 +470,7 @@ async function loadDashboardData() {
     
     try {
         // Load KPIs
-        const kpiResponse = await fetch(`${API_BASE_URL}/api/kpis`, {
+        const kpiResponse = await fetch(`${API_BASE_URL}/api/kpis?dashboardType=${currentDashboardType}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(filters)
@@ -476,7 +479,7 @@ async function loadDashboardData() {
         updateKPIs(kpis);
 
         // Load table data
-        const tableResponse = await fetch(`${API_BASE_URL}/api/table-data`, {
+        const tableResponse = await fetch(`${API_BASE_URL}/api/table-data?dashboardType=${currentDashboardType}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(filters)
@@ -504,7 +507,7 @@ function updateKPIs(kpis) {
 async function updateChart() {
     const filters = getFilters();
     try {
-        const response = await fetch(`${API_BASE_URL}/api/chart-data`, {
+        const response = await fetch(`${API_BASE_URL}/api/chart-data?dashboardType=${currentDashboardType}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ ...filters, metric: chartMetric })
@@ -640,6 +643,7 @@ function updateTable() {
     }
 
     updatePagination();
+    updateKPIVisibility();
 }
 function handleSearch() {
     const searchTerm = document.getElementById('searchInput').value.toLowerCase();
@@ -840,4 +844,102 @@ renderPartnerOptions = function() {
     if (selectedSpan.textContent !== partnerName) {
         handlePartnerFilterLock();
     }
+}
+
+// Tab switching logic
+function setupDashboardTabs() {
+    const adsenseTab = document.getElementById('adsenseTab');
+    const adManagerTab = document.getElementById('adManagerTab');
+    if (!adsenseTab || !adManagerTab) return;
+
+    adsenseTab.addEventListener('click', function() {
+        if (currentDashboardType !== 'adsense') {
+            currentDashboardType = 'adsense';
+            adsenseTab.classList.add('active');
+            adsenseTab.style.borderBottom = '3px solid #000';
+            adsenseTab.style.color = '#000';
+            adManagerTab.classList.remove('active');
+            adManagerTab.style.borderBottom = '3px solid transparent';
+            adManagerTab.style.color = '#787774';
+            initializeDashboard();
+        }
+    });
+    adManagerTab.addEventListener('click', function() {
+        if (currentDashboardType !== 'admanager') {
+            currentDashboardType = 'admanager';
+            adManagerTab.classList.add('active');
+            adManagerTab.style.borderBottom = '3px solid #000';
+            adManagerTab.style.color = '#000';
+            adsenseTab.classList.remove('active');
+            adsenseTab.style.borderBottom = '3px solid transparent';
+            adsenseTab.style.color = '#787774';
+            initializeDashboard();
+        }
+    });
+}
+
+function updateKPIVisibility() {
+    // Hide Page Views KPI and chart option for Ad Manager
+    const pageViewsKpi = document.getElementById('totalPageViews').parentElement.parentElement;
+    const impressionsKpi = document.getElementById('totalImpressions').parentElement.parentElement;
+    const revenueKpi = document.getElementById('totalRevenue').parentElement.parentElement;
+    const ecpmKpi = document.getElementById('averageEcpm').parentElement.parentElement;
+    const chartMetricDropdown = document.getElementById('chartMetricDropdown');
+    const pageViewsChartOption = chartMetricDropdown.querySelector('[data-value="page_views"]');
+    // Table column
+    const table = document.querySelector('table');
+    if (!pageViewsKpi || !impressionsKpi || !revenueKpi || !ecpmKpi || !pageViewsChartOption || !table) return;
+    // Table header and all rows for Page Views
+    const ths = table.querySelectorAll('th');
+    const pageViewsThIndex = Array.from(ths).findIndex(th => th.textContent.trim().toLowerCase().includes('page views'));
+    if (currentDashboardType === 'admanager') {
+        pageViewsKpi.style.display = 'none';
+        impressionsKpi.style.display = '';
+        revenueKpi.style.display = '';
+        ecpmKpi.style.display = '';
+        pageViewsChartOption.style.display = 'none';
+        // Hide Page Views column in table
+        if (pageViewsThIndex !== -1) {
+            ths[pageViewsThIndex].style.display = 'none';
+            // Hide all td in this column
+            const trs = table.querySelectorAll('tbody tr, thead tr');
+            trs.forEach(tr => {
+                if (tr.children[pageViewsThIndex]) tr.children[pageViewsThIndex].style.display = 'none';
+            });
+        }
+    } else {
+        pageViewsKpi.style.display = '';
+        impressionsKpi.style.display = '';
+        revenueKpi.style.display = '';
+        ecpmKpi.style.display = '';
+        pageViewsChartOption.style.display = '';
+        if (pageViewsThIndex !== -1) {
+            ths[pageViewsThIndex].style.display = '';
+            const trs = table.querySelectorAll('tbody tr, thead tr');
+            trs.forEach(tr => {
+                if (tr.children[pageViewsThIndex]) tr.children[pageViewsThIndex].style.display = '';
+            });
+        }
+    }
+}
+// Call updateKPIVisibility after dashboard/tab switch and after table/chart render
+const origInitializeDashboard = initializeDashboard;
+initializeDashboard = function() {
+    origInitializeDashboard.apply(this, arguments);
+    updateKPIVisibility();
+}
+const origSetupDashboardTabs = setupDashboardTabs;
+setupDashboardTabs = function() {
+    origSetupDashboardTabs.apply(this, arguments);
+    updateKPIVisibility();
+}
+const origUpdateTable = updateTable;
+updateTable = function() {
+    origUpdateTable.apply(this, arguments);
+    updateKPIVisibility();
+}
+const origUpdateChart = updateChart;
+updateChart = async function() {
+    await origUpdateChart.apply(this, arguments);
+    updateKPIVisibility();
 }
